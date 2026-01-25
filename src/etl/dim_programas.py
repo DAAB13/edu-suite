@@ -2,107 +2,95 @@ import pandas as pd
 import numpy as np
 import warnings
 from pathlib import Path
+
+# --- IMPORTACIONES DE TU PROYECTO ---
 from src.core.funciones import copiar_archivo_onedrive
 from src.core.formateador import aplicar_formato_excel
 from src.core.config_loader import config, mappings
+# Importamos tus herramientas
+from src.core.limpieza import limpiar_texto_general, limpiar_cabeceras
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
 def dimension_programas():
-  print("🚀 Iniciando actualización de datos desde OneDrive...")
-  copiar_archivo_onedrive('data_programacion')
-
-  ruta = Path(config['paths']['input']) / config['files']['data_programacion']
-  hoja_prog = config['sheets']['programacion']
-
-  print(f"🔄 Cargando hoja '{hoja_prog}'...")
-  df_programas = pd.read_excel(ruta, sheet_name=hoja_prog)
-  df_programas.columns = df_programas.columns.str.replace('\n', ' ', regex=True).str.strip()
-
-  # Aplicamos el filtro usando df_programas
-  soportes_permitidos = config['filtros_reporte']['soportes']
-  df_programas = df_programas[df_programas['SOPORTE'].isin(soportes_permitidos)].copy()
+    """
+    📊 PROCESO ETL: DIMENSIÓN PROGRAMAS
+    Transforma la programación de clases en una lista única de programas con fechas globales.
+    """
+    # 1. Sincronización: Traemos la última versión del Panel de Programación
+    copiar_archivo_onedrive('data_programacion')
+    ruta = Path(config['paths']['input']) / config['files']['data_programacion']
     
-  print(f"🔦 Filtro aplicado. Trabajando con {len(df_programas)} registros de: {soportes_permitidos}")
+    # 2. Carga y Limpieza inicial de cabeceras usando limpieza.py
+    df_raw = pd.read_excel(ruta, sheet_name=config['sheets']['programacion'])
+    df_raw = limpiar_cabeceras(df_raw)
 
+    # 3. Filtrado por Soporte Académico
+    soportes_val = config['filtros_reporte']['soportes']
+    df_raw = df_raw[df_raw['SOPORTE'].isin(soportes_val)].copy()
 
-  #-----------------------------------------------------------------------
-  # LÓGICA DE SOPORTE
-  # Convertimos FECHAS a datetime para que el orden sea cronológico real
-  # Si hay errores en fechas, coerce las vuelve NaT y las pone al final
-  #------------------------------------------------------------------
-  if 'FECHAS' in df_programas.columns:
-    df_programas['FECHAS'] = pd.to_datetime(df_programas['FECHAS'], errors='coerce')
-        
-    # Ordenamos por Periodo, NRC y Fecha
-    # Así, la última clase (sesión 90 o la final) queda al último de cada grupo.
-    print("📅 Ordenando registros para capturar el último asistente asignado...")
-    df_programas = df_programas.sort_values(by=['PERIODO', 'NRC', 'FECHAS'], ascending=True)
-  
-  # traemos el mapa y seleccionamos columnas
-  col_map = mappings['programas_mappings']['columns']
-  df = df_programas[list(col_map.keys())].rename(columns=col_map).copy()
-
-  # creamos el ID PERIODO.NRC
-  df['ID'] = df['PERIODO'].astype(str) + '.' + df['NRC'].astype(str)
-  
-  # formato Nombre Completo del Programa
-  df['PROGRAMA_COMPLETO'] = df['PROGRAMA_NOMBRE'].astype(str) + " - " + df['GRUPO'].astype(str)
-
-  # --- NUEVA LÓGICA DE FECHAS REALES (INICIO Y FIN) ---
-  print("📅 Calculando fechas reales de inicio y fin por programa...")
-
-  # Creamos un resumen agrupado por ID para obtener el min y max
-  # Usamos df_programas porque aún tiene todas las filas (sesiones)
-  df_fechas = df_programas.groupby(['PERIODO', 'NRC'])['FECHAS'].agg(['min', 'max']).reset_index()
-  df_fechas.columns = ['PERIODO', 'NRC', 'FECHA_INICIO', 'FECHA_FIN']
-
-  # Creamos el ID en este resumen para poder cruzarlo
-  df_fechas['ID'] = df_fechas['PERIODO'].astype(str) + '.' + df_fechas['NRC'].astype(str)
+    # 4. Estandarización de Fechas y Creación de ID Único
+    if 'FECHAS' in df_raw.columns:
+        df_raw['FECHAS'] = pd.to_datetime(df_raw['FECHAS'], errors='coerce')
     
-  # Cruzamos estos nuevos datos con nuestro DataFrame principal 'df'
-  # Solo nos interesan las columnas calculadas y el ID para el cruce
-  df = df.merge(df_fechas[['ID', 'FECHA_INICIO', 'FECHA_FIN']], on='ID', how='left')
+    def crear_id(row):
+        try:
+            p = str(int(float(row['PERIODO'])))
+            n = str(int(float(row['NRC']))).zfill(4)
+            return f"{p}.{n}"
+        except:
+            return "0.0000"
 
-  # CONVERSIÓN A DIMENSIÓN (Eliminar duplicados)
-  # Usamos keep='last' para quedarnos con el SOPORTE más reciente asignado al NRC
-  df = df.drop_duplicates(subset=['ID'], keep='last')
+    df_raw['ID'] = df_raw.apply(crear_id, axis=1)
 
-  # --- LÓGICA DE ESTADO AUTOMÁTICO ---
-  print("🤖 Automatizando el estado de los programas según calendario...")
-  # definimos hoy (sin hora)
-  hoy = pd.Timestamp.now().normalize()
-  # aplicamos la lógica de forma directa (Vectorizada)
-  df.loc[hoy > df['FECHA_FIN'], 'ESTADO_PROGRAMA'] = 'CULMINÓ'
-  df.loc[hoy < df['FECHA_INICIO'], 'ESTADO_PROGRAMA'] = 'POR INICIAR'
-  df.loc[(hoy >= df['FECHA_INICIO']) & (hoy <= df['FECHA_FIN']), 'ESTADO_PROGRAMA'] = 'ACTIVO'
+    # ---------------------------------------------------------
+    # 5. CÁLCULO DE FECHAS EXTREMAS (La razón del Merge)
+    # ---------------------------------------------------------
+    # Agrupamos todas las sesiones para hallar el inicio y fin real del curso
+    df_fechas = df_raw.groupby('ID')['FECHAS'].agg(['min', 'max']).reset_index()
+    df_fechas.columns = ['ID', 'FECHA_INICIO', 'FECHA_FIN']
 
-  # 4. LIMPIEZA DINÁMICA (Texto)
-  for col in mappings['programas_mappings']['text_columns']:
-    if col in df.columns:
-      df[col] = df[col].astype(str).str.strip().str.upper()
+    df_fechas['FECHA_INICIO'] = pd.to_datetime(df_fechas['FECHA_INICIO']).dt.normalize()
+    df_fechas['FECHA_FIN'] = pd.to_datetime(df_fechas['FECHA_FIN']).dt.normalize()
 
-  # 5. LIMPIEZA ESPECÍFICA (Asistente Soporte)
-  if 'SOPORTE' in df.columns:
-    # Quitamos comas si las hubiera y espacios dobles
-    df['SOPORTE'] = (
-      df['SOPORTE']
-      .str.replace(',', '', regex=False)
-      .str.replace(r'\s+', ' ', regex=True)
-      .str.strip()
-    )
+    # 6. Preparación de la Dimensión (Deduplicación)
+    col_map = mappings['programas_mappings']['columns']
+    df = df_raw.drop_duplicates(subset=['ID'], keep='last').copy()
+    df = df.rename(columns=col_map)
+    
+    # Columna calculada para nombres de programa completos
+    df['PROGRAMA_COMPLETO'] = df['PROGRAMA_NOMBRE'].astype(str) + " - " + df['GRUPO'].astype(str)
 
-  # EXPORTAR ARCHIVO
-  ruta_salida = Path(config['paths']['output']) / config['files']['dim_programas']
-  ruta_salida.parent.mkdir(parents=True, exist_ok=True)
-  orden = mappings['programas_mappings']['column_order']
-  df = df[orden]
+    # 7. CRUCE: Pegamos las fechas calculadas a nuestra lista única de programas
+    df = df.merge(df_fechas, on='ID', how='left')
 
-  df.to_excel(ruta_salida, index=False)
-  aplicar_formato_excel(ruta_salida)
-  
-  print(f"✅ Dimensión Programas generada exitosamente en: {ruta_salida}")
-  print(f"📊 Total de Programas únicos: {len(df)}")
+    # ---------------------------------------------------------
+    # 8. LÓGICA DE NEGOCIO Y LIMPIEZA FINAL
+    # ---------------------------------------------------------
+    # Determinamos el estado actual del programa basado en el día de hoy
+    hoy = pd.Timestamp.now().normalize()
+    df['ESTADO_PROGRAMA'] = 'ACTIVO'
+    df.loc[hoy > df['FECHA_FIN'], 'ESTADO_PROGRAMA'] = 'CULMINÓ'
+    df.loc[hoy < df['FECHA_INICIO'], 'ESTADO_PROGRAMA'] = 'POR INICIAR'
+
+    # Limpieza de texto usando tu módulo centralizado
+    text_cols = mappings['programas_mappings']['text_columns']
+    df = limpiar_texto_general(df, text_cols)
+
+    # ---------------------------------------------------------
+    # 9. EXPORTACIÓN Y FORMATO
+    # ---------------------------------------------------------
+    ruta_salida = Path(config['paths']['output']) / config['files']['dim_programas']
+    ruta_salida.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Orden final según el diccionario de mapeos
+    orden = mappings['programas_mappings']['column_order']
+    df = df[orden] 
+    
+    df.to_excel(ruta_salida, index=False)
+    aplicar_formato_excel(ruta_salida)
+    
+    print(f"📊 Total de Programas únicos procesados: {len(df)}")
 
 if __name__ == "__main__":
-  dimension_programas()
+    dimension_programas()

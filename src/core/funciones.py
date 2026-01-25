@@ -13,7 +13,6 @@ def copiar_archivo_onedrive(nombre_archivo_key):
   ruta_destino.parent.mkdir(parents=True, exist_ok=True) # aseguramos que la carpeta destino exista
   try:
     shutil.copy2(ruta_origen, ruta_destino)
-    print(f"✅ {nombre_archivo} copiado con éxito.")
   except Exception as e:
     print(f"❌ Falló la copia: {e}")
 

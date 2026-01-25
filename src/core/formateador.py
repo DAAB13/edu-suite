@@ -53,4 +53,3 @@ def aplicar_formato_excel(ruta_archivo, nombre_hoja="Sheet1"):
         ws.column_dimensions[column_letter].width = adjusted_width
 
     wb.save(ruta_archivo)
-    print(f"✨ Formato corregido en: {Path(ruta_archivo).name}")

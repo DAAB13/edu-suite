@@ -1,78 +1,75 @@
-Aquí tienes el contenido completo del archivo README.md en formato Markdown puro, listo para que lo copies y lo pegues en tu proyecto.
+# 🎓 EDU-CLI: Academic Management Suite
 
-UPN - Sistema de Automatización ETL y Modelo de Datos Académico
-Este proyecto es una solución integral de Ingeniería de Datos diseñada para procesar, limpiar y transformar los registros de programación académica de UPN (EPEC/Posgrado). El sistema migra la gestión basada en archivos Excel manuales y desordenados hacia un Modelo de Datos (Star Schema) optimizado para análisis en Power BI y automatización de procesos operativos.
+**EDU-CLI** es una plataforma de orquestación de datos y supervisión académica de alto rendimiento, desarrollada para la gestión operativa de programas de Postgrado en la **UPN**. Esta herramienta transforma la complejidad de los archivos de programación masivos en Excel hacia un modelo de datos relacional y un tablero de control (TUI) intuitivo y profesional.
 
-📌 Visión General del Proyecto
-El sistema automatiza la extracción de datos desde OneDrive, aplica reglas de negocio para la limpieza de cabeceras, normalización de fechas y deduplicación, generando un modelo de datos "Diego-céntrico". El objetivo primordial es que la gestión de Soporte (Diego) cuente con información verídica y depurada, eliminando el ruido de programas ajenos a su asignación.
+---
 
-🏗️ Arquitectura del Sistema
-El proyecto sigue una estructura modular basada en la separación de responsabilidades:
+## 🏗️ Arquitectura y Estructura del Proyecto
 
-Plaintext
-UPN/
-├── 01_input/               # Capa Bronze: Archivos originales copiados de OneDrive.
-├── 02_output/              # Capa Silver: Dimensiones y Hechos limpios y formateados.
-├── config/                 # Configuración centralizada (YAML).
-│   ├── mappings.yaml       # Definición de columnas, tipos de datos y orden de salida.
-│   └── settings.yaml       # Rutas globales, nombres de archivos y filtros de soporte.
-├── src/                    # Código fuente organizado.
-│   ├── core/               # Funciones compartidas (config_loader, formateador, funciones).
-│   └── etl/                # Scripts de transformación (dim_docentes, dim_programas, fact_programacion).
-└── main.py                 # Orquestador que ejecuta el flujo completo del proceso.
-🛠️ El Modelo de Datos (Esquema en Estrella)
-El procesamiento genera tres entidades principales vinculadas por identificadores únicos:
+El sistema está diseñado bajo el principio de **Separación de Responsabilidades (SoC)**, asegurando que cada módulo tenga una función única y clara.
 
-1. Dimensión Programas (dim_programas.xlsx)
-Granularidad: Un registro único por programa académico mediante la llave ID (combinación de PERIODO y NRC).
+```plaintext
+edu-suite/
+├── 01_data/                # Almacenamiento local de bitácoras y archivos persistentes.
+├── 02_output/              # Repositorio de Dimensiones y Fact Table generadas.
+├── config/                 # Configuración dinámica mediante archivos YAML.
+├── src/                    # Código fuente del sistema.
+│   ├── core/               # Lógica de limpieza, mappings y cargador de configuración.
+│   ├── etl/                # Motores de transformación (Docentes, Programas, Fact Table).
+│   └── ops/                # Comandos de negocio, monitoreo y auditoría.
+├── edu.py                  # Punto de entrada y orquestador principal de la CLI.
+└── requirements.txt        # Dependencias (Typer, Pandas, Rich, PyYAML).
 
-Lógica Técnica:
+🚀 Funcionalidades Detalladas
+1. Motor ETL de Alta Precisión (python edu.py run)
+El proceso de transformación de datos no solo copia información, sino que la enriquece:
 
-Realiza una limpieza de cabeceras eliminando saltos de línea (\n) y espacios en blanco de los títulos.
+Dimensión Docentes: Normaliza identidades y consolida la base de datos de profesores.
 
-Filtra los registros según el soporte asignado en el archivo settings.yaml (ej. "DIEGO").
+Dimensión Programas: Realiza un Cálculo de Fechas Extremas mediante agrupaciones (groupby), detectando el inicio y fin real de cada curso a partir de sus múltiples sesiones.
 
-Procesa la columna FECHAS para asegurar un formato cronológico real y útil para el análisis.
+Fact Table: Construye la tabla de hechos con una Llave Única Estandarizada (ID = Periodo.NRC), permitiendo cruces de datos infalibles con otros sistemas.
 
-2. Dimensión Docentes (dim_docentes.xlsx)
-Granularidad: Un registro por cada docente identificado por su CODIGO_BANNER.
+2. Dashboard de Monitoreo Proactivo (python edu.py ops status)
+Este comando ofrece una visualización avanzada de la carga de trabajo actual:
 
-Integración: Consolida datos de la hoja de "Docentes Activos" y la tabla "RUT", aplicando reglas de deduplicación y limpieza de nombres (eliminación de comas y espacios múltiples).
+Resumen Ejecutivo: Tarjetas dinámicas organizadas por columnas que muestran el conteo total de programas activos desglosados por categoría.
 
-Limpieza de Identidad: Formatea el DNI con ceros a la izquierda y normaliza el campo GENERO basándose en un mapa de valores predefinido en los mappings.
+Visualización de Progreso: Implementación de una barra de avance moderna con estilo de puntos (●●●○○) y colorización inteligente (Rojo/Amarillo/Verde) según el cumplimiento.
 
-3. Fact Table Programación (fact_programacion.xlsx)
-Granularidad: Un registro por cada sesión de clase individual.
+Prevención de Próximos Inicios: Tabla dedicada a cursos por iniciar, ordenada cronológicamente con una Cuenta Regresiva automática de días faltantes.
 
-Relación: Conecta los programas con los docentes asignados, incluyendo horarios, estados de clase y tipos de sesión.
+3. Supervisión Diaria y Agenda (python edu.py ops day)
+Optimizado para la gestión minuto a minuto:
 
-Cálculos de Calidad: Realiza la limpieza de columnas numéricas (horas y tarifas) reemplazando errores por valores neutros para asegurar la integridad de los cálculos.
+Dashboard Temporal: Resumen de sesiones para Hoy, Mañana y Pasado Mañana mediante un diseño de tarjetas en paneles.
 
-⚙️ Configuración y Escalabilidad
-El diseño permite escalar el sistema sin modificar el código fuente:
+Detección de Inconsistencias: El sistema realiza una auditoría silenciosa y alerta si detecta errores en la data (como estados NaN o sesiones sin docente) antes de mostrar la agenda.
 
-Parametrización vía YAML: Los filtros de soporte, las hojas de Excel y las rutas de carpetas se gestionan externamente para mayor flexibilidad.
+🧠 Estándares de Ingeniería y Diseño
+Estandarización de IDs y Limpieza
+Para evitar la duplicidad y asegurar la integridad referencial, el sistema aplica la función estandarizar_id en todas las capas, garantizando el formato XXXXXX.XXXX.
 
-Filtros Dinámicos: Si se desea incluir a otro soporte (ej. "MARIA"), solo se debe añadir a la lista en settings.yaml y el modelo lo incluirá automáticamente en la siguiente ejecución.
+Gestión de Tipos de Datos (Anti-Error)
+Se implementó una corrección crítica para resolver el conflicto entre pd.Timestamp y datetime.date. El sistema normaliza todas las fechas en la capa ETL mediante .dt.normalize(), asegurando que las comparaciones lógicas en los dashboards funcionen sin errores de ejecución.
 
-Blindaje de Proceso: El orquestador main.py utiliza bloques try-except para capturar errores críticos e informar al usuario, permitiendo identificar fallas en archivos específicos (como la falta de la columna 'SOPORTE' en el Excel de docentes).
+Interfaz de Usuario (TUI) de Alto Contraste
+El diseño visual en la terminal ha sido pulido para ser "pixel-perfect":
 
-🚀 Reglas de Negocio Implementadas
-Normalización de Texto: Conversión automática a mayúsculas y eliminación de espacios en blanco (TRIM) en campos de texto de todas las tablas.
+Accesibilidad: Uso de códigos hexadecimales (#000000 sobre Yellow) para garantizar que las cabeceras sean legibles en cualquier tema de terminal.
 
-Identificadores Únicos: Generación de llaves primarias (ID) para garantizar la integridad referencial entre la tabla de hechos y la dimensión de programas.
+Layout Adaptativo: Las métricas de resumen utilizan Columns para auto-ajustarse al ancho de la ventana del usuario.
 
-Limpieza de Contacto: Formateo de celulares eliminando espacios y caracteres no numéricos para asegurar la utilidad de la data.
-
-Formateo Ejecutivo: Todos los archivos de salida en 02_output incluyen auto-ajuste de columnas, cabeceras estilizadas y filtros automáticos habilitados mediante la librería openpyxl.
-
-💻 Guía de Ejecución
-Asegúrese de que los archivos fuente estén disponibles en la ruta de OneDrive configurada en settings.yaml.
-
-Verifique que el filtro de soporte incluya el nombre deseado.
-
-Ejecute el script principal desde la terminal:
-
+🔧 Guía de Uso Rápido
 Bash
-python main.py
-Los resultados finales se generarán automáticamente en la carpeta 02_output/.
+# Sincronizar y generar el modelo de datos completo
+python edu.py run
+
+# Consultar el tablero de control de programas activos
+python edu.py ops status
+
+# Ver la agenda de supervisión para los próximos 3 días
+python edu.py ops day
+
+# Ejecutar auditoría profunda de errores en la data
+python edu.py ops check

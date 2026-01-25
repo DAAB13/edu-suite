@@ -6,13 +6,22 @@ venv/
 # Python cache
 __pycache__/
 *.py[cod]
+*$py.class
 
-# Archivos de salida y datos (según tu imagen)
-# Carpeta de datos de entrada
+# Datos y Salidas (Privacidad y peso)
+00_data/
 01_input/
 02_output/
 *.xlsx
+*.csv
 
-# Configuraciones personales y sensibles
+# Seguridad y Credenciales (CRÍTICO)
+.env
+
+# Configuraciones locales (Rutas de OneDrive, etc.)
 config/settings.yaml
 config/mappings.yaml
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
