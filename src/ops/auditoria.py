@@ -33,5 +33,21 @@ def realizar_auditoria_curso():
                 'Detalle': ' / '.join(map(str, nombres)) # Une los nombres con una barra
             })
 
+    # ---------------------------------------------------------
+    # REGLA 02: Sesiones pasadas sin estado (Olvidos)
+    # ---------------------------------------------------------
+    hoy = pd.Timestamp.now().normalize()
+    df['FECHA'] = pd.to_datetime(df['FECHA'])
+    
+    # Filtramos: Fecha menor a hoy Y Estado es nulo
+    olvidos = df[(df['FECHA'] < hoy) & (df['ESTADO_CLASE'].isna())]
+
+    for _, fila in olvidos.iterrows():
+        hallazgos.append({
+            'ID': fila['ID'],
+            'Tipo': 'Estado Faltante',
+            'Detalle': f"Clase del {fila['FECHA'].strftime('%d/%m')} no fue marcada como DICTADA/REPRO"
+        })
+
     # Retornamos una lista de diccionarios con los errores encontrados
     return hallazgos

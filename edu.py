@@ -23,20 +23,24 @@ from src.reporte.outlook import crear_borrador_outlook
 
 
 # 1. Configuración de la App Principal
-app = typer.Typer(help="EDU-CLI: Gestión de Datos de Postgrado UPN")
+app = typer.Typer(
+    help="🐍 Sistema de Orquestación Operativa y RPA 😎",
+    add_completion=False #Esto quita las opciones de completion
+)
+
 console = Console()
 
 # módulos
-ops_app = typer.Typer(name="ops", help="Consultas operativas (Vistas de Negocio)")
-repo_app = typer.Typer(name="repo", help="Reporte domingos)")
+ops_app = typer.Typer(name="ops", help="🦉 Consultas operativas")
+repo_app = typer.Typer(name="repo", help="📶 Reporte domingo")
 app.add_typer(ops_app)
 app.add_typer(repo_app)
 
 # --- COMANDO: RUN (ETL) ---
 @app.command("run")
 def ejecutar_todo():
-    """🏁 ACTUALIZACIÓN COMPLETA DEL MODELO DE DATOS"""
-    console.print(Panel.fit("🚀 [bold blue]SISTEMA DE GESTIÓN ACADÉMICA[/bold blue]", border_style="blue"))
+    """🕹️  Modelo de datos"""
+    console.print(Panel.fit("🚀 [bold blue]ACTUALIZACIÓN DEL MODELO DE DATOS[/bold blue]", border_style="blue"))
     try:
         with console.status("[bold yellow]Procesando Dimensiones...") as status:
             dimension_docentes()
@@ -46,9 +50,9 @@ def ejecutar_todo():
 
         with console.status("[bold magenta]Construyendo Fact Table...") as status:
             fact_programacion()
-            console.log("⭐ Fact Table: Actualizada")
+            console.log("⭐ Fact Programación: Actualizada")
 
-        console.print("\n[bold white on green]--- ✨ PROCESO FINALIZADO ---[/bold white on green]\n")
+        console.print("\n[bold white on green]--- 🦄 ETL FINALIZADO ---[/bold white on green]\n")
     except Exception as e:
         console.print(f"\n[bold red]--- ❌ ERROR: {e} ---[/bold red]")
 
@@ -56,36 +60,44 @@ def ejecutar_todo():
 # --- COMANDO: OPS DAY (AGENDA) ---
 @ops_app.command("day")
 def agenda_diaria():
+    """🔍 Agenda diaria"""
     fecha_hoy = pd.Timestamp.now().strftime('%d/%m')
     df_hoy, count_manana, count_pasado = query_agenda_supervision()
+
+    # --- CHEQUEO SILENCIOSO DE CALIDAD (Movido arriba para las tarjetas) ---
+    hallazgos = realizar_auditoria_curso() 
+    num_alertas = len(hallazgos)
 
     # --- BLOQUE DE TARJETAS (ESTILO DASHBOARD) ---
     # Definimos las tarjetas con colores temáticos para hoy, mañana y pasado
     metrica_hoy = f" [bold cyan][/bold cyan][bold black on cyan]{len(df_hoy)}[/bold black on cyan][bold cyan][/bold cyan] SESIONES HOY ({fecha_hoy})"
     metrica_manana = f" [bold blue][/bold blue][bold black on blue]{count_manana}[/bold black on blue][bold blue][/bold blue] mañana"
     metrica_pasado = f" [bold blue][/bold blue][bold black on blue]{count_pasado}[/bold black on blue][bold blue][/bold blue] pasado mañana"
+    
+    # Tarjeta Dinámica de Alertas: Verde si es 0, Roja si hay olvidos
+    color_alerta = "red" if num_alertas > 0 else "green"
+    metrica_alertas = f" [bold {color_alerta}][/bold {color_alerta}][bold white on {color_alerta}]{num_alertas}[/bold white on {color_alerta}][bold {color_alerta}][/bold {color_alerta}] ALERTAS"
 
-    # Organizamos las tarjetas en una fila horizontal
-    resumen_grid = Columns([metrica_hoy, metrica_manana, metrica_pasado], padding=(0, 4))
+    # Organizamos las 4 tarjetas en la fila horizontal
+    resumen_grid = Columns([metrica_hoy, metrica_manana, metrica_pasado, metrica_alertas], padding=(0, 2))
+
+    console.print() # <--- ESTE ES EL SALTO DE LÍNEA
 
     # Envolvemos todo en un Panel elegante
     console.print(Panel(
         resumen_grid,
-        title="🗓️  [bold white]RESUMEN DE CARGA PRÓXIMOS DÍAS[/bold white]",
+        title="🗓️  [bold white]RESUMEN DE CARGA[/bold white]",
         title_align="left",
         border_style="cyan",
         padding=(1, 2)
     ))
 
-    # --- CHEQUEO SILENCIOSO DE CALIDAD ---
-    hallazgos = realizar_auditoria_curso() # Llamamos a tu auditor
+    # --- AVISO DE CALIDAD ---
     if hallazgos:
-        # Si hay errores, lanzamos el aviso en color amarillo/naranja
-        console.print(f"\n[bold yellow]⚠️  AVISO:[/bold yellow] Se detectaron [bold red]{len(hallazgos)}[/bold red] inconsistencias en la data.")
         console.print("[dim yellow]Ejecuta 'python edu.py ops check' para ver los detalles.[/dim yellow]")
 
     table = Table(
-        title=f"\n🚀 [bold]AGENDA COMPLETA HOY ({fecha_hoy})[/bold]",
+        title=f"\n👍 [bold]AGENDA DEL DÍA ({fecha_hoy})[/bold]",
         title_justify="left",
         header_style="bold green",
         border_style="green"
@@ -99,29 +111,35 @@ def agenda_diaria():
     table.add_column("Estado", justify="center")
 
     for _, fila in df_hoy.iterrows():
-        estado = str(fila['ESTADO_CLASE']).upper()
+        # --- LÓGICA DE ESTADO: MÁS LIMPIA Y SIN COLOR PARA PENDIENTE ---
+        estado_raw = str(fila['ESTADO_CLASE'])
         
-        # --- COLORES SOLICITADOS ---
-        color_estado = "green" if "PENDIENTE" in estado else "blue" if "DICTADO" in estado else "white"
-        
-        # --- SOLO HORA INICIO ---
-        hora_inicio = str(fila['HORA_INICIO'])
+        if pd.isna(fila['ESTADO_CLASE']) or estado_raw.upper() == "NAN":
+            # Blanco por defecto y en minúsculas
+            estado_display = "pendiente" 
+        elif estado_raw == "DICTADA":
+            estado_display = "[bold green]DICTADA[/bold green]"
+        elif estado_raw == "REPROGRAMADA":
+            estado_display = "[bold orange3]REPROGRAMADA[/bold orange3]"
+        else:
+            estado_display = estado_raw
         
         table.add_row(
-            hora_inicio,
+            str(fila['HORA_INICIO']),
             str(fila['ID']),
             str(fila['PROGRAMA_NOMBRE'])[:60],
             str(fila['CURSO_NOMBRE'])[:45],
             str(fila['NOMBRE_COMPLETO'])[:35],
-            f"[{color_estado}]{estado}[/{color_estado}]"
+            estado_display 
         )
+        
     console.print(table)
 
 
 # --- COMANDO: CHECK (AUDITORÍA) ---
 @ops_app.command("check")
 def revisar_inconsistencias():
-    """🔍 ANALIZADOR DE CALIDAD DE DATOS (AUDITORÍA)"""
+    """🚨 Alertas """
     # Llamamos al "cerebro" que busca los errores
     hallazgos = realizar_auditoria_curso()
 
@@ -135,7 +153,7 @@ def revisar_inconsistencias():
 
     # Si hay errores, creamos la tabla roja como en tu imagen
     table = Table(
-        title="\n🚨 [bold red]REPORTE DE INCONSISTENCIAS DETECTADAS[/bold red]",
+        title="\n🚨 [bold red]ALERTAS DETECTADAS[/bold red]",
         header_style="bold red", 
         border_style="red"
     )
@@ -159,7 +177,7 @@ def revisar_inconsistencias():
 # --- COMANDO: STATUS (MONITOREO) ---
 @ops_app.command("status")
 def monitoreo_progreso():
-    """📊 DASHBOARD DE PROGRESO Y SEGUIMIENTO"""
+    """📈 Programas activos"""
     # 1. Obtenemos el resumen procesado desde monitoreo.py
     df = procesar_resumen_progreso()
     
@@ -183,7 +201,7 @@ def monitoreo_progreso():
         # Imprimimos el panel resumen antes de la tabla
         console.print(Panel(
             resumen_organizado,
-            title=f"📌 [bold cyan]{total_activos} PROGRAMAS ACTIVOS[/bold cyan]",
+            title=f"📌 [bold cyan]{total_activos} CURSOS ACTIVOS[/bold cyan]",
             title_align="left",
             border_style="cyan",
             padding=(1, 2)
@@ -191,7 +209,7 @@ def monitoreo_progreso():
 
         # --- CONSTRUCCIÓN DE LA TABLA ---
         table = Table(
-            title="🚀 [bold cyan]DETALLE DE GESTIÓN (CURSOS EN MARCHA)[/bold cyan]",
+            title="🚀 [bold cyan]DETALLE CURSOS ACTIVOS[/bold cyan]",
             title_justify="left",
             header_style="bold white on blue",
             border_style="blue"
@@ -278,14 +296,14 @@ def log_repro(
     fecha: str = typer.Option(..., help="Fecha de la clase (DD/MM/YYYY)"),
     detalle: str = typer.Option(..., help="Motivo de la reprogramación")
 ):
-    """📝 ANOTAR REPROGRAMACIÓN PARA EL REPORTE DEL DOMINGO"""
+    """📝 Registro log reprogramaciones"""
     registrar_reprogramacion(id, fecha, detalle)
 
 
 
 @repo_app.command("preview")
 def preview_reporte():
-    """👀 VISTA PREVIA PROFESIONAL (IA ARRIBA / TABLA ABAJO)"""
+    """👀 Vista previa reporte"""
     df, kpis = procesar_datos_semana() #
     
     # 1. KPIs Rápidos en Terminal
@@ -323,7 +341,7 @@ def preview_reporte():
 
 @repo_app.command("mail")
 def ejecutar_reporte_domingo():
-    """🚀 PROCESO COMPLETO: ETL + IA + ENVÍO A WILLIAM"""
+    """🌅 Generar reporte outlook"""
     console.print(Panel.fit("📬 [bold cyan]INICIANDO REPORTE SEMANAL EJECUTIVO[/bold cyan]", border_style="cyan"))
 
     # 1. Fase de Datos (ETL)
@@ -336,7 +354,9 @@ def ejecutar_reporte_domingo():
         # Aplicamos el orden de columnas del mappings.yaml
         orden = mappings['domingo_mappings']['column_order']
         df_final = df_para_outlook[orden].copy()
-        df_final['FECHA'] = df_final['FECHA'].dt.strftime('%d/%m/%Y') #
+        
+        # IMPORTANTE: Formateamos la fecha a texto solo después de haber ordenado
+        df_final['FECHA'] = df_final['FECHA'].dt.strftime('%d/%m/%Y') 
 
     # 2. Fase de Inteligencia (IA)
     with console.status("[bold magenta]🧠 Redactando mensaje ejecutivo con Groq...[/bold magenta]"):

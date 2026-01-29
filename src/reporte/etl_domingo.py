@@ -20,11 +20,15 @@ def procesar_datos_semana():
     df_fact['ID'] = df_fact['ID'].apply(estandarizar_id)
     df_dim['ID'] = df_dim['ID'].apply(estandarizar_id)
 
-    # 1. FILTRO DE FECHAS (Semana Actual)
-    hoy = datetime.now()
-    inicio_semana = (hoy - timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0)
-    fin_semana = (inicio_semana + timedelta(days=6)).replace(hour=23, minute=59, second=59)
-    df_fact['FECHA'] = pd.to_datetime(df_fact['FECHA'])
+    # 1. FILTRO DE FECHAS (Semana Actual: Lunes a Domingo)
+    # Usamos normalize() para que la comparación sea solo por fecha, ignorando horas
+    hoy = pd.Timestamp.now().normalize()
+    # Calculamos el lunes restando el número del día de la semana (0=Lunes, 6=Domingo)
+    inicio_semana = hoy - pd.Timedelta(days=hoy.weekday())
+    fin_semana = inicio_semana + pd.Timedelta(days=6)
+    
+    df_fact['FECHA'] = pd.to_datetime(df_fact['FECHA']).dt.normalize()
+    # Filtro inclusivo (>= y <=) para no perder el lunes ni el domingo
     df_semana = df_fact[(df_fact['FECHA'] >= inicio_semana) & (df_fact['FECHA'] <= fin_semana)].copy()
 
     # 2. ENRIQUECIMIENTO: Pegamos Nombre del Programa
@@ -43,7 +47,7 @@ def procesar_datos_semana():
     if path_log.exists():
         df_log = pd.read_csv(path_log, dtype={'ID': str})
         df_log['ID'] = df_log['ID'].apply(estandarizar_id)
-        df_log['FECHA_CLASE'] = pd.to_datetime(df_log['FECHA_CLASE'], dayfirst=True)
+        df_log['FECHA_CLASE'] = pd.to_datetime(df_log['FECHA_CLASE'], dayfirst=True).dt.normalize()
         df_reporte = df_reporte.merge(
             df_log[['ID', 'FECHA_CLASE', 'DETALLE']], 
             left_on=['ID', 'FECHA'], right_on=['ID', 'FECHA_CLASE'], how='left'
@@ -51,11 +55,15 @@ def procesar_datos_semana():
     else:
         df_reporte['DETALLE'] = ""
 
+    # 6. ORDENAMIENTO CRONOLÓGICO (Factor "Wao")
+    # Ordenamos por Fecha y luego por Hora de Inicio para William
+    df_reporte = df_reporte.sort_values(by=['FECHA', 'HORA_INICIO'], ascending=[True, True])
+
     # Rellenamos nulos para evitar errores visuales
     df_reporte['DETALLE'] = df_reporte['DETALLE'].fillna("")
     df_reporte['PROGRAMA_NOMBRE'] = df_reporte['PROGRAMA_NOMBRE'].fillna("SIN PROGRAMA")
 
-    # 6. CÁLCULO DE MÉTRICAS
+    # 7. CÁLCULO DE MÉTRICAS (Basado en el dataframe ya filtrado y ordenado)
     metrics = {
         "dictadas": len(df_reporte[df_reporte['ESTADO_CLASE'] == 'DICTADA']),
         "reprogramadas": len(df_reporte[df_reporte['ESTADO_CLASE'] == 'REPROGRAMADA']),
