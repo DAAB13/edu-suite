@@ -5,6 +5,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.columns import Columns  # <--- Agregado para el nuevo layout
+from rich.text import Text
 from pathlib import Path
 from datetime import datetime # Para fechas automáticas
 # Importaciones de tu proyecto
@@ -20,6 +21,7 @@ from src.reporte.repro import registrar_reprogramacion
 from src.reporte.etl_domingo import procesar_datos_semana
 from src.reporte.agente_ia import redactar_resumen_semanal
 from src.reporte.outlook import crear_borrador_outlook
+from src.bot import mapa, preparador, scrapper, ui_bot
 
 
 # 1. Configuración de la App Principal
@@ -33,8 +35,11 @@ console = Console()
 # módulos
 ops_app = typer.Typer(name="ops", help="🦉 Consultas operativas")
 repo_app = typer.Typer(name="repo", help="📶 Reporte domingo")
+bot_app = typer.Typer(name="bot", help="🤖 Automatización de Grabaciones (RPA)")
 app.add_typer(ops_app)
 app.add_typer(repo_app)
+app.add_typer(bot_app)
+
 
 # --- COMANDO: RUN (ETL) ---
 @app.command("run")
@@ -367,6 +372,37 @@ def ejecutar_reporte_domingo():
         crear_borrador_outlook(texto_ia, df_final, kpis)
 
     console.print("\n[bold white on green] ✨ ¡TODO LISTO! Revisa tu bandeja de Borradores en Outlook. [/bold white on green]\n")
+
+
+@bot_app.command("map")
+def bot_actualizar_mapa():
+    """🗺️  Actualiza la base de IDs internos de Blackboard"""
+    console.print(Panel.fit("📡 [bold magenta]ACTUALIZANDO MAPA DE CURSOS[/bold magenta]", border_style="magenta"))
+    mapa.run()
+
+
+@bot_app.command("sync")
+def bot_flujo_completo():
+    """🚀 RECOLECCIÓN INTEGRAL: Preparar -> Scrapear -> Generar Excel"""
+    ui_bot.console.print(Panel("[bold cyan]🔥 INICIANDO RECOLECCIÓN DE GRABACIONES[/bold cyan]", border_style="cyan"))
+    
+    # 1. Preparación de datos
+    with ui_bot.console.status("[bold yellow]Filtrando tus cursos del Panel V7...[/bold yellow]"):
+        preparador.run()
+    
+    # 2. Ejecución del Scrapper
+    scrapper.run()
+    
+    # 3. Dashboard Final (Toque Wao)
+    resumen = Text.assemble(
+        ("\n📊 OPERACIÓN COMPLETADA EXITOSAMENTE\n", "bold green"),
+        ("Tus links han sido recolectados y ordenados por NRC.\n", "white"),
+        ("\nArchivo de pegado: ", "dim"), (f"00_data/{config['bot_files']['grabaciones_log']}", "bold magenta"),
+        ("\n\n[💡] Sugerencia: Filtra por NRC en el Excel para copiar bloques enteros.", "italic cyan")
+    )
+    
+    ui_bot.console.print(Panel(resumen, title="[✨ DASHBOARD FINAL]", border_style="green", expand=True))
+    ui_bot.console.print("\n[bold white on green] ✨ ¡CICLO EDU-SUITE FINALIZADO! [/bold white on green]\n")
 
 
 if __name__ == "__main__":
