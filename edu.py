@@ -67,67 +67,75 @@ def ejecutar_todo():
 def agenda_diaria():
     """🔍 Agenda diaria"""
     fecha_hoy = pd.Timestamp.now().strftime('%d/%m')
-    df_hoy, count_manana, count_pasado = query_agenda_supervision()
+    df_hoy, count_manana, count_pasado = query_agenda_supervision() #
 
-    # --- CHEQUEO SILENCIOSO DE CALIDAD (Movido arriba para las tarjetas) ---
-    hallazgos = realizar_auditoria_curso() 
-    num_alertas = len(hallazgos)
+    # --- CHEQUEO SILENCIOSO DE CALIDAD ---
+    hallazgos = realizar_auditoria_curso() #
+    num_alertas = len(hallazgos) #
 
-    # --- BLOQUE DE TARJETAS (ESTILO DASHBOARD) ---
-    # Definimos las tarjetas con colores temáticos para hoy, mañana y pasado
-    metrica_hoy = f" [bold cyan][/bold cyan][bold black on cyan]{len(df_hoy)}[/bold black on cyan][bold cyan][/bold cyan] SESIONES HOY ({fecha_hoy})"
-    metrica_manana = f" [bold blue][/bold blue][bold black on blue]{count_manana}[/bold black on blue][bold blue][/bold blue] mañana"
-    metrica_pasado = f" [bold blue][/bold blue][bold black on blue]{count_pasado}[/bold black on blue][bold blue][/bold blue] pasado mañana"
+    # --- BLOQUE DE TARJETAS (ESTILO DASHBOARD PRO) ---
+    # Función interna corregida para el diseño de tarjetas
+    def crear_tarjeta(valor, titulo, color):
+        return Panel(
+            Text(f"{valor}", style=f"bold {color}", justify="center"),
+            title=f"[bold white]{titulo}[/]",
+            border_style=color,
+            width=18
+        )
+
+    # Generamos las tarjetas individuales
+    t_hoy = crear_tarjeta(len(df_hoy), f"HOY ({fecha_hoy})", "cyan")
+    t_manana = crear_tarjeta(count_manana, "MAÑANA", "blue")
+    t_pasado = crear_tarjeta(count_pasado, "PASADO", "blue")
     
-    # Tarjeta Dinámica de Alertas: Verde si es 0, Roja si hay olvidos
     color_alerta = "red" if num_alertas > 0 else "green"
-    metrica_alertas = f" [bold {color_alerta}][/bold {color_alerta}][bold white on {color_alerta}]{num_alertas}[/bold white on {color_alerta}][bold {color_alerta}][/bold {color_alerta}] ALERTAS"
+    t_alertas = crear_tarjeta(num_alertas, "ALERTAS", color_alerta)
 
-    # Organizamos las 4 tarjetas en la fila horizontal
-    resumen_grid = Columns([metrica_hoy, metrica_manana, metrica_pasado, metrica_alertas], padding=(0, 2))
+    # CORRECCIÓN: Se cambió 'spacing=1' por 'padding=(0, 1)' para evitar el TypeError
+    resumen_grid = Columns([t_hoy, t_manana, t_pasado, t_alertas], padding=(0, 1)) #
 
-    console.print() # <--- ESTE ES EL SALTO DE LÍNEA
+    console.print() 
 
-    # Envolvemos todo en un Panel elegante
+    # Envolvemos el grid en el Panel contenedor
     console.print(Panel(
         resumen_grid,
-        title="🗓️  [bold white]RESUMEN DE CARGA[/bold white]",
-        title_align="left",
-        border_style="cyan",
+        title="📊 [bold white]RESUMEN DE CARGA OPERATIVA[/bold white]",
+        title_align="center",
+        border_style="bright_blue",
         padding=(1, 2)
     ))
 
     # --- AVISO DE CALIDAD ---
     if hallazgos:
-        console.print("[dim yellow]Ejecuta 'python edu.py ops check' para ver los detalles.[/dim yellow]")
+        console.print("[dim yellow]Ejecuta 'python edu.py ops check' para ver los detalles.[/dim yellow]") #
 
+    # --- TABLA DE AGENDA ---
     table = Table(
         title=f"\n👍 [bold]AGENDA DEL DÍA ({fecha_hoy})[/bold]",
         title_justify="left",
         header_style="bold green",
         border_style="green"
-    )
+    ) #
 
     table.add_column("Hora", style="cyan", justify="center")
     table.add_column("ID", style="magenta")
     table.add_column("Programa", style="yellow")
     table.add_column("Curso", style="white")
     table.add_column("Docente", style="white")
-    table.add_column("Estado", justify="center")
+    table.add_column("Estado", justify="center") #
 
     for _, fila in df_hoy.iterrows():
-        # --- LÓGICA DE ESTADO: MÁS LIMPIA Y SIN COLOR PARA PENDIENTE ---
-        estado_raw = str(fila['ESTADO_CLASE'])
+        # Lógica de estado pendiente
+        estado_raw = str(fila['ESTADO_CLASE']) #
         
         if pd.isna(fila['ESTADO_CLASE']) or estado_raw.upper() == "NAN":
-            # Blanco por defecto y en minúsculas
-            estado_display = "pendiente" 
+            estado_display = "pendiente" #
         elif estado_raw == "DICTADA":
-            estado_display = "[bold green]DICTADA[/bold green]"
+            estado_display = "[bold green]DICTADA[/bold green]" #
         elif estado_raw == "REPROGRAMADA":
-            estado_display = "[bold orange3]REPROGRAMADA[/bold orange3]"
+            estado_display = "[bold orange3]REPROGRAMADA[/bold orange3]" #
         else:
-            estado_display = estado_raw
+            estado_display = estado_raw #
         
         table.add_row(
             str(fila['HORA_INICIO']),
@@ -136,10 +144,9 @@ def agenda_diaria():
             str(fila['CURSO_NOMBRE'])[:45],
             str(fila['NOMBRE_COMPLETO'])[:35],
             estado_display 
-        )
+        ) #
         
     console.print(table)
-
 
 # --- COMANDO: CHECK (AUDITORÍA) ---
 @ops_app.command("check")
