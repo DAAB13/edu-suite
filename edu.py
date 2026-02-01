@@ -191,78 +191,97 @@ def revisar_inconsistencias():
 def monitoreo_progreso():
     """📈 Programas activos"""
     # 1. Obtenemos el resumen procesado desde monitoreo.py
-    df = procesar_resumen_progreso()
+    df = procesar_resumen_progreso() #
     
     # 2. SECCIÓN: CURSOS ACTIVOS
     df_activos = df[df['ESTADO_PROGRAMA'] == 'ACTIVO'].copy()
     
     if not df_activos.empty:
-        # --- BLOQUE DE ESTADÍSTICAS (MODO DASHBOARD) ---
-        total_activos = len(df_activos)
-        conteo_cursos = df_activos['CURSO_NOMBRE'].value_counts() #
+        # --- 🟢 BLOQUE DE ESTADÍSTICAS: DASHBOARD VERTICAL SENIOR ---
+        total_cursos = len(df_activos) #
+        total_programas = df_activos['PROGRAMA_NOMBRE'].nunique() #
         
-        # Creamos "tarjetas" individuales para cada curso
-        etiquetas = [
-            f" [bold cyan]●[/bold cyan] [bold white]{cant}[/bold white] {curso.title()[:25]}" 
-            for curso, cant in conteo_cursos.items()
-        ]
-        
-        # Organizamos las tarjetas en columnas para aprovechar el ancho
-        resumen_organizado = Columns(etiquetas, padding=(0, 2), equal=False)
+        # 1. Agrupamos Programas por volumen de carga (Descendente)
+        conteo_prog = df_activos['PROGRAMA_NOMBRE'].value_counts()
+        # 2. Agrupamos Cursos (Estilo original de la captura)
+        conteo_cursos = df_activos['CURSO_NOMBRE'].value_counts()
 
-        # Imprimimos el panel resumen antes de la tabla
+        # Usamos una tabla principal vertical para que los nombres tengan todo el ancho
+        content_grid = Table.grid(expand=True)
+        content_grid.add_column()
+
+        # --- SECCIÓN A: PROGRAMAS (JERARQUÍA AMARILLA) ---
+        content_grid.add_row("[bold yellow]📂 [PROGRAMAS ACTUALES][/bold yellow]")
+        for prog, cant in conteo_prog.items():
+            # Número en amarillo como pediste, nombre completo en blanco
+            content_grid.add_row(f" [bold yellow]({cant})[/bold yellow] [white]{prog}[/white]")
+        
+        # Separador estético para dividir los bloques
+        content_grid.add_row("[dim white]" + "─" * 40 + "[/dim white]")
+
+        # --- SECCIÓN B: CURSOS (DETALLE CIAN) ---
+        content_grid.add_row("[bold cyan]📚 [CURSOS DETALLE][/bold cyan]")
+        for curso, cant in conteo_cursos.items():
+            # Recuperamos el estilo '● Cant Nombre' de tu captura favorita
+            content_grid.add_row(f" [bold cyan]●[/bold cyan] [bold white]{cant}[/bold white] [white]{curso}[/white]")
+
+        # Imprimimos el Panel de Control Único
         console.print(Panel(
-            resumen_organizado,
-            title=f"📌 [bold cyan]{total_activos} CURSOS ACTIVOS[/bold cyan]",
-            title_align="left",
-            border_style="cyan",
+            content_grid,
+            title=f"🚀 [bold white]SISTEMA ACTIVO: {total_cursos} CURSOS EN {total_programas} PROGRAMAS[/bold white]",
+            title_align="center",
+            border_style="bright_blue",
             padding=(1, 2)
         ))
 
-        # --- CONSTRUCCIÓN DE LA TABLA ---
+        # --- 📊 TABLA: DETALLE CURSOS ACTIVOS (CORREGIDA) ---
         table = Table(
-            title="🚀 [bold cyan]DETALLE CURSOS ACTIVOS[/bold cyan]",
+            title="🔍 [bold cyan]DETALLE DE EJECUCIÓN ACADÉMICA[/bold cyan]",
             title_justify="left",
-            header_style="bold white on blue",
+            header_style="bold white on blue", 
             border_style="blue"
-        )
+        ) 
 
         table.add_column("ID", style="magenta", no_wrap=True)
-        table.add_column("Curso", style="white", width=30)
+        # Curso no wrap con puntos suspensivos para que no rompa la fila
+        table.add_column("Curso", style="white", width=40, no_wrap=True, overflow="ellipsis")
         table.add_column("Repro", justify="center", style="bold red")
         table.add_column("Progreso", justify="center")
-        table.add_column("Avance %", width=20)
-        table.add_column("Fin", style="dim")
+        
+        # MEJORA CRÍTICA: Ancho aumentado a 18 para evitar el salto de línea
+        table.add_column("Avance %", width=18, justify="center", no_wrap=True) 
+        
+        # Reordenamiento: Inicio y Fin al final
+        table.add_column("Inicio", justify="center", style="dim") 
+        table.add_column("Fin", style="dim", justify="center")    
 
         for _, fila in df_activos.iterrows():
             pct = fila['AVANCE']
             bloques = int(pct * 10)
             color_bar = "red" if pct < 0.3 else "yellow" if pct < 0.7 else "green"
-            
-            # Estilo de puntos moderno
             barra = f"[{color_bar}]" + "●" * bloques + "[/ " + color_bar + "]" + "○" * (10 - bloques)
             
-            # Fecha limpia sin horas
-            fecha_fin_txt = fila['FECHA_FIN'].strftime('%Y-%m-%d') if pd.notnull(fila['FECHA_FIN']) else "N/A"
+            f_inicio = fila['FECHA_INICIO'].strftime('%Y-%m-%d') if pd.notnull(fila['FECHA_INICIO']) else "N/A"
+            f_fin = fila['FECHA_FIN'].strftime('%Y-%m-%d') if pd.notnull(fila['FECHA_FIN']) else "N/A"
             
             table.add_row(
                 str(fila['ID']),
-                str(fila['CURSO_NOMBRE'])[:30],
+                str(fila['CURSO_NOMBRE']),
                 str(int(fila['REPROGRAMADAS'])),
                 f"{int(fila['DICTADAS'])}/{int(fila['TOTAL_SESIONES'])}",
-                f"{barra} [bold]{pct:.0%}[/bold]",
-                fecha_fin_txt 
-            )
+                f"{barra} [bold]{pct:.0%}[/bold]", # Todo en una línea ahora
+                f_inicio,
+                f_fin
+            ) 
 
         console.print(table)
     else:
         console.print(Panel.fit("[yellow]No hay cursos actualmente en estado ACTIVO.[/yellow]", border_style="yellow"))
 
-    # 3. SECCIÓN: PRÓXIMOS INICIOS
+    # 3. SECCIÓN: PRÓXIMOS INICIOS (MANTIENE EXCELENCIA)
     df_proximos = df[df['ESTADO_PROGRAMA'] == 'POR INICIAR'].copy()
     
     if not df_proximos.empty:
-        # Ordenamos por fecha para ver lo más urgente arriba
         df_proximos = df_proximos.sort_values(by='FECHA_INICIO')
 
         table_ini = Table(
@@ -270,33 +289,28 @@ def monitoreo_progreso():
             title_justify="left",
             header_style="bold #000000 on yellow",
             border_style="yellow"
-        )
+        ) 
 
         table_ini.add_column("ID", style="cyan", no_wrap=True)
-        table_ini.add_column("Curso", style="white", width=40)
+        table_ini.add_column("Programa", style="dim white", width=35)
+        table_ini.add_column("Curso", style="bold white", width=50)
         table_ini.add_column("Fecha Inicio", justify="center")
         table_ini.add_column("Cuenta Regresiva", justify="right")
 
-        # Fecha de hoy para calcular la resta
         hoy_dt = pd.Timestamp.now().normalize()
 
         for _, fila in df_proximos.iterrows():
-            # Aseguramos que la fecha sea comparable
             fecha_ini = pd.to_datetime(fila['FECHA_INICIO']).normalize()
             dias_faltan = (fecha_ini - hoy_dt).days
-            
-            # Semáforo de urgencia
-            if dias_faltan <= 3:
-                txt_countdown = f"[bold red]¡Inicia en {dias_faltan} días![/bold red]"
-            else:
-                txt_countdown = f"[green]Faltan {dias_faltan} días[/green]"
+            txt_countdown = f"[bold red]¡Inicia en {dias_faltan} días![/bold red]" if dias_faltan <= 3 else f"[green]Faltan {dias_faltan} días[/green]"
 
             table_ini.add_row(
                 str(fila['ID']),
-                str(fila['CURSO_NOMBRE']).title()[:40],
+                str(fila['PROGRAMA_NOMBRE']),
+                str(fila['CURSO_NOMBRE']).title(),
                 fecha_ini.strftime('%Y-%m-%d'),
                 txt_countdown
-            )
+            ) 
 
         console.print(table_ini)
 
