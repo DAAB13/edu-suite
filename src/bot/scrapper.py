@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 from src.core.config_loader import config, BASE_DIR
 from src.bot.ui_bot import (
     mostrar_tabla_prevuelo, log_curso_card, log_accion, 
-    log_exito, log_error, log_curso_fin, log_alerta
+    log_exito, log_error, log_curso_fin, log_alerta,
+    log_salto
 )
 
 def parsear_fecha_bb(texto_raw):
@@ -21,7 +22,7 @@ def parsear_fecha_bb(texto_raw):
             return f"{int(dia):02d}/{meses_en.get(mes, '01')}/{anio}"
     except: return texto_raw
 
-def gestionar_login_upn(page, user_mail, user_pass):
+def gestionar_login_bb(page, user_mail, user_pass):
     log_accion("Verificando sesión...", icono="🔐")
     page.goto(config['blackboard']['urls']['login'], wait_until="domcontentloaded")
     time.sleep(3)
@@ -42,8 +43,8 @@ def gestionar_login_upn(page, user_mail, user_pass):
         return True
     return False
 
-def extraer_grabaciones_curso(page):
-    """Navega y extrae links con escaneo de frames dinámico."""
+def extraer_grabaciones_curso(page, nrc_actual, historico_set):
+    """Navega y extrae links con estrategia de salida temprana y filtro de 'Grabando'."""
     capturas = []
     try:
         boton_teams = page.get_by_text("Sala videoconferencias | Class for Teams").first
@@ -63,7 +64,6 @@ def extraer_grabaciones_curso(page):
             
             # 2. ESCÁNER DE FRAMES INTELIGENTE
             frame_teams = None
-            # Reintentamos durante 20 segundos para superar la pantalla de "Cargando contenido..."
             for _ in range(20):
                 for f in page.frames:
                     try:
@@ -81,20 +81,53 @@ def extraer_grabaciones_curso(page):
                 time.sleep(5)
                 
                 filas = frame_teams.locator("tr")
+                # Iteramos las filas de la tabla
                 for i in range(1, filas.count()):
                     cols = filas.nth(i).locator("td")
                     if cols.count() < 3: continue
+                    
+                    # --- FILTRO 1: CLASE EN VIVO ---
+                    texto_fila = filas.nth(i).inner_text()
+                    if "Grabando" in texto_fila or "Recording" in texto_fila:
+                        log_alerta("Clase en curso (Grabando). Omitiendo fila...")
+                        continue # Salta esta fila pero sigue con las siguientes
+                    # -------------------------------
+
+                    # Extracción ligera
                     f_raw = cols.nth(0).inner_text().split('\n')[0].strip()
+                    fecha_bb = parsear_fecha_bb(f_raw)
+                    duracion_txt = cols.nth(2).inner_text().strip()
+                    
+                    # --- FILTRO 2: CORTAFUEGOS (EARLY EXIT) ---
+                    huella_digital = (str(nrc_actual), str(fecha_bb), str(duracion_txt))
+                    
+                    if historico_set and huella_digital in historico_set:
+                        log_salto(fecha_bb)
+                        break  # Salta al siguiente CURSO (ignora el resto de filas)
+                    # ------------------------------------------
+
                     btn_menu = cols.last.locator("button").first
                     link = "No disponible"
+                    
+                    # Si llegamos aquí, extraemos
                     if btn_menu.is_visible():
                         btn_menu.click()
                         time.sleep(1)
-                        page.evaluate("navigator.clipboard.writeText('')")
-                        frame_teams.get_by_text("Copiar enlace", exact=True).first.click()
-                        time.sleep(1)
-                        link = page.evaluate("navigator.clipboard.readText()")
-                    capturas.append({"ID": "", "fecha": parsear_fecha_bb(f_raw), "duracion": cols.nth(2).inner_text().strip(), "link_grabacion": link})
+                        btn_copiar = frame_teams.get_by_text("Copiar enlace", exact=True).first
+                        if btn_copiar.is_visible():
+                            page.evaluate("navigator.clipboard.writeText('')")
+                            btn_copiar.click()
+                            time.sleep(1)
+                            link = page.evaluate("navigator.clipboard.readText()")
+                        else:
+                            log_error("Botón 'Copiar enlace' no encontrado.")
+
+                    capturas.append({
+                        "ID": str(nrc_actual), 
+                        "fecha": fecha_bb, 
+                        "duracion": duracion_txt, 
+                        "link_grabacion": link
+                    })
             else:
                 log_error("No se detectó el entorno de grabaciones (Iframe no cargó).")
         return capturas
@@ -110,7 +143,16 @@ def run():
     URL_BASE = config['blackboard']['urls']['course_outline']
 
     df_historico = pd.read_excel(PATH_LOG_EXCEL, dtype={'ID': str}) if PATH_LOG_EXCEL.exists() else pd.DataFrame()
-    grabaciones_conocidas = set(zip(df_historico['ID'], df_historico['fecha'])) if not df_historico.empty else set()
+    
+    if not df_historico.empty:
+        grabaciones_conocidas = set(zip(
+            df_historico['ID'].astype(str), 
+            df_historico['fecha'].astype(str), 
+            df_historico['duracion'].astype(str)
+        ))
+    else:
+        grabaciones_conocidas = set()
+
     df_tareas = pd.read_csv(PATH_COMBUSTIBLE, sep=';', encoding='latin1', dtype={'ID': str})
     
     mostrar_tabla_prevuelo(df_tareas)
@@ -124,18 +166,18 @@ def run():
                 permissions=["clipboard-read", "clipboard-write"]
             )
             page = context.pages[0]
-            if gestionar_login_upn(page, os.getenv("UPN_MAIL"), os.getenv("UPN_PASS")):
+            if gestionar_login_bb(page, os.getenv("BB_MAIL"), os.getenv("BB_PASS")):
                 for idx, row in df_tareas.iterrows():
                     id_nrc = str(row['ID'])
                     log_curso_card(idx + 1, len(df_tareas), id_nrc, row['Nombre_BB'])
                     page.goto(URL_BASE.format(id_interno=row['ID_Interno']), wait_until="networkidle")
                     
-                    sesiones = extraer_grabaciones_curso(page)
+                    sesiones = extraer_grabaciones_curso(page, id_nrc, grabaciones_conocidas)
+                    
                     for s in sesiones:
-                        if (id_nrc, s['fecha']) not in grabaciones_conocidas:
-                            s['ID'] = id_nrc
-                            nuevas_capturas.append(s)
-                            log_exito(f"Nueva grabación capturada: {s['fecha']}")
+                        nuevas_capturas.append(s)
+                        log_exito(f"Nueva grabación capturada: {s['fecha']}")
+                    
                     log_curso_fin()
             context.close()
         except Exception as e:
@@ -143,10 +185,11 @@ def run():
 
     if nuevas_capturas:
         df_final = pd.concat([df_historico, pd.DataFrame(nuevas_capturas)], ignore_index=True)
-        # Guardado blindado
         writer = pd.ExcelWriter(PATH_LOG_EXCEL, engine='xlsxwriter')
         df_final.to_excel(writer, index=False, sheet_name='Sheet1')
         formato_texto = writer.book.add_format({'num_format': '@'})
         writer.sheets['Sheet1'].set_column('A:A', 20, formato_texto)
         writer.close()
         log_exito(f"🚀 Reporte actualizado con IDs protegidos.")
+        
+    return len(nuevas_capturas) # Devuelve el número para que Edu lo use

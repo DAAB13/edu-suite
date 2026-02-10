@@ -1,7 +1,6 @@
-# 🎓 EDU-CLI: Academic Management Suite
+# 🎓 Edu suite: orquestado operativo
 
-**EDU-CLI** es una plataforma de orquestación de datos y supervisión académica de alto rendimiento, desarrollada para la gestión operativa de programas de Postgrado en la **UPN**. Esta herramienta transforma la complejidad de los archivos de programación masivos en Excel hacia un modelo de datos relacional y un tablero de control (TUI) intuitivo y profesional.
-
+**EDU SUITE** es una herramienta de línea de comandos (CLI) diseñada para eliminar la carga administrativa manual en la gestión de programas academicos. Centraliza el procesamiento de datos, la auditoría de clases, la generación de reportes con IA y la automatización RPA
 ---
 
 ## 🏗️ Arquitectura y Estructura del Proyecto
@@ -9,67 +8,114 @@
 El sistema está diseñado bajo el principio de **Separación de Responsabilidades (SoC)**, asegurando que cada módulo tenga una función única y clara.
 
 ```plaintext
-edu-suite/
-├── 01_data/                # Almacenamiento local de bitácoras y archivos persistentes.
-├── 02_output/              # Repositorio de Dimensiones y Fact Table generadas.
-├── config/                 # Configuración dinámica mediante archivos YAML.
-├── src/                    # Código fuente del sistema.
-│   ├── core/               # Lógica de limpieza, mappings y cargador de configuración.
-│   ├── etl/                # Motores de transformación (Docentes, Programas, Fact Table).
-│   └── ops/                # Comandos de negocio, monitoreo y auditoría.
-├── edu.py                  # Punto de entrada y orquestador principal de la CLI.
-└── requirements.txt        # Dependencias (Typer, Pandas, Rich, PyYAML).
+EDU-SUITE/
+├── .venv/                    # Entorno virtual de Python
+├── 00_data/                  # Almacenamiento local de bitácoras y persistencia
+│   ├── anuncios_log.csv      # Registro de encuestas enviadas (NUEVO)
+│   ├── combustible_bot.csv   # Registro de carga para el bot RPA
+│   ├── grabaciones_log.xlsx  # Histórico de grabaciones recolectadas
+│   ├── mapa_ids.csv          # Mapeo de IDs internos de Blackboard
+│   └── repro_log.csv         # Bitácora de clases reprogramadas
+├── 01_input/                 # Insumos maestros (OneDrive)
+│   ├── chrome_profile/       # Perfil de usuario para persistencia del bot
+│   ├── PANEL - DOCENTES EPEC V1.xlsx
+│   └── PANEL DE PROGRAMACIÓN V7.xlsx
+├── 02_output/                # Repositorio de resultados del ETL
+│   ├── dim_docentes.xlsx  
+│   ├── dim_programas.xlsx    
+│   └── fact_programacion.xlsx  
+├── config/                   # Configuración dinámica mediante YAML
+│   ├── mappings.yaml         # Diccionarios de columnas y mapeo
+│   └── settings.yaml         # Rutas globales y selectores del bot
+├── src/                    
+│   ├── bot/                  # Automatización RPA
+│   │   ├── anuncios/         # Módulo de Comunicación Masiva (NUEVO)
+│   │   │   ├── core_announcer.py     # Motor de inyección HTML y persistencia
+│   │   │   ├── encuesta_template.html # Plantilla visual de la encuesta
+│   │   │   └── survey_bot.py         # Orquestador de filtros y envíos
+│   │   ├── live/             # Monitoreo en Tiempo Real (NUEVO)
+│   │   │   └── monitor.py            # Dashboard de supervisión "War Room"
+│   │   ├── __init__.py
+│   │   ├── mapa.py
+│   │   ├── preparador.py
+│   │   ├── scrapper.py
+│   │   └── ui_bot.py
+│   ├── core/                 # Motores de carga y limpieza
+│   │   ├── __init__.py
+│   │   ├── config_loader.py
+│   │   ├── formateador.py
+│   │   ├── funciones.py
+│   │   └── limpieza.py
+│   ├── etl/                  # Procesos de transformación (Dimensionamiento)
+│   │   ├── __init__.py
+│   │   ├── dim_docentes.py
+│   │   ├── dim_programas.py
+│   │   └── fact_programacion.py
+│   ├── ops/                  # Comandos de negocio y monitoreo
+│   │   ├── __init__.py
+│   │   ├── auditoria.py
+│   │   ├── monitoreo.py
+│   │   └── supervision.py
+│   └── reporte/              # Generación de reportes e IA
+│       ├── __init__.py
+│       ├── agente_ia.py
+│       ├── etl_domingo.py
+│       ├── outlook.py
+│       └── repro.py
+├── .env                      # Credenciales y llaves API (Protegido)
+├── .gitignore                # Archivos excluidos de Git
+├── bienvenida.py             # Script de inicialización visual
+├── edu.py                    # Orquestador principal de la CLI
+├── README.md                 # Documentación técnica
+└── requirements.txt          # Dependencias (Pandas, Rich, Typer, etc.)
+```
 
-🚀 Funcionalidades Detalladas
-1. Motor ETL de Alta Precisión (python edu.py run)
-El proceso de transformación de datos no solo copia información, sino que la enriquece:
 
-Dimensión Docentes: Normaliza identidades y consolida la base de datos de profesores.
+## Guía comandos CLI
+Comando principal: python edu.py
+1. MODELO DE DATOS 
+-     python edu.py run: Actualiza el modelo de datos completo.
+2. CONSULTA DIARIA
+-     python edu.py ops day: Visualiza la agenda de clases de hoy
+-     python edu.py ops check: Para detectar inconsistencias
+-     python edu.py ops status: Monitor de programas activos con barras de progreso y cuenta regresiva de inicios.
+3. REPORTE SEMANAL
+-     python edu.py repo preview: Genera una vista previa del reporte semanal
+-     python edu.py repo mail: Automatiza la creación del reporte en Outlook
+-     python edu.py repo log: Registro rápido de reprogramaciones en la bitácora local
+4. RPA - GRABACIONES BLACKBOARD
+-     python edu.py bot map: Sincroniza los IDs internos de Blackboard.
+-     python edu.py bot sync: Inicia el flujo completo de recolección de grabaciones
+-     python edu.py bot survey: Envío masivo de encuestas a cursos
+-     python edu.py bot live: supervición de clases grabadas en vivo
 
-Dimensión Programas: Realiza un Cálculo de Fechas Extremas mediante agrupaciones (groupby), detectando el inicio y fin real de cada curso a partir de sus múltiples sesiones.
+## Configuración y requisitos
 
-Fact Table: Construye la tabla de hechos con una Llave Única Estandarizada (ID = Periodo.NRC), permitiendo cruces de datos infalibles con otros sistemas.
+**Interfaz:** Typer y Rich para una consola visual y profesional.
 
-2. Dashboard de Monitoreo Proactivo (python edu.py ops status)
-Este comando ofrece una visualización avanzada de la carga de trabajo actual:
+**Datos:** Pandas, Numpy y Openpyxl para el manejo de archivos Excel.
 
-Resumen Ejecutivo: Tarjetas dinámicas organizadas por columnas que muestran el conteo total de programas activos desglosados por categoría.
+**IA:** Groq para la generación de lenguaje natural en reportes.
 
-Visualización de Progreso: Implementación de una barra de avance moderna con estilo de puntos (●●●○○) y colorización inteligente (Rojo/Amarillo/Verde) según el cumplimiento.
+**Automatización:** Playwright
 
-Prevención de Próximos Inicios: Tabla dedicada a cursos por iniciar, ordenada cronológicamente con una Cuenta Regresiva automática de días faltantes.
+**Organización** Python-dotenv y PyYAML para la gestión de entornos.
 
-3. Supervisión Diaria y Agenda (python edu.py ops day)
-Optimizado para la gestión minuto a minuto:
 
-Dashboard Temporal: Resumen de sesiones para Hoy, Mañana y Pasado Mañana mediante un diseño de tarjetas en paneles.
+## ⚙️ Modulos
+1. **MODELO DE DATOS (`run`)**: Procesa los Excel maestros y genera el modelo relacional.
+2. **OPERACIONES (`ops`)**: Agenda diaria, auditoría de errores y monitoreo de progreso.
+3. **REPORTES (`repo`)**: Generación de sustentos técnicos y redacción ejecutiva con IA.
+4. **BOT RPA (`bot`)**: Sincronización y extracción masiva de grabaciones.
 
-Detección de Inconsistencias: El sistema realiza una auditoría silenciosa y alerta si detecta errores en la data (como estados NaN o sesiones sin docente) antes de mostrar la agenda.
 
-🧠 Estándares de Ingeniería y Diseño
-Estandarización de IDs y Limpieza
-Para evitar la duplicidad y asegurar la integridad referencial, el sistema aplica la función estandarizar_id en todas las capas, garantizando el formato XXXXXX.XXXX.
 
-Gestión de Tipos de Datos (Anti-Error)
-Se implementó una corrección crítica para resolver el conflicto entre pd.Timestamp y datetime.date. El sistema normaliza todas las fechas en la capa ETL mediante .dt.normalize(), asegurando que las comparaciones lógicas en los dashboards funcionen sin errores de ejecución.
 
-Interfaz de Usuario (TUI) de Alto Contraste
-El diseño visual en la terminal ha sido pulido para ser "pixel-perfect":
+## 🛠️ Solución de Problemas Frecuentes
 
-Accesibilidad: Uso de códigos hexadecimales (#000000 sobre Yellow) para garantizar que las cabeceras sean legibles en cualquier tema de terminal.
-
-Layout Adaptativo: Las métricas de resumen utilizan Columns para auto-ajustarse al ancho de la ventana del usuario.
-
-🔧 Guía de Uso Rápido
-Bash
-# Sincronizar y generar el modelo de datos completo
-python edu.py run
-
-# Consultar el tablero de control de programas activos
-python edu.py ops status
-
-# Ver la agenda de supervisión para los próximos 3 días
-python edu.py ops day
-
-# Ejecutar auditoría profunda de errores en la data
-python edu.py ops check
+| Error Común | Causa | Solución |
+| :--- | :--- | :--- |
+| `PermissionError: [Errno 13]` | El Excel de input está abierto. | Cierra el archivo en Excel antes de ejecutar el comando. |
+| `KeyError: 'Columna X'` | TI cambió el nombre de una columna. | Actualiza el nombre en `config/mappings.yaml` sin tocar el código. |
+| `Groq API Error` | La API Key expiró o no hay internet. | Verifica el archivo `.env` y tu conexión a la red. |
+| `Rutas de OneDrive` | El path es demasiado largo. | Asegúrate de que la carpeta raíz esté mapeada lo más cerca posible al `C:/`. |

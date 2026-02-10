@@ -39,3 +39,8 @@ def log_error(mensaje):
 
 def log_curso_fin():
     console.print("[dim white]   ╰───────────────────────────────────────────[/dim white]")
+
+# --- NUEVA FUNCIÓN AGREGADA ---
+def log_salto(fecha):
+    """Visualización visual para el salto de registros antiguos (Early Exit)"""
+    console.print(f"   [bold magenta]│[/bold magenta] ⏭️  [italic yellow]Registro del {fecha} ya existe. Saltando historial antiguo...[/italic yellow]")

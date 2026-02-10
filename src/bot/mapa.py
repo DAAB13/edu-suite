@@ -18,8 +18,8 @@ def run():
     # 1. CARGA DE CONFIGURACIÓN Y CREDENCIALES
     load_dotenv(BASE_DIR / ".env")
     USER_ID_BB = os.getenv("USER_ID_BB")
-    UPN_MAIL = os.getenv("UPN_MAIL")
-    UPN_PASS = os.getenv("UPN_PASS")
+    BB_MAIL = os.getenv("BB_MAIL")
+    BB_PASS = os.getenv("BB_PASS")
 
     # Rutas dinámicas desde settings.yaml
     ARCHIVO_SALIDA = BASE_DIR / config['paths']['data'] / config['bot_files']['mapa_ids']
@@ -40,14 +40,14 @@ def run():
         page.goto(BB_URLS['login'])
         
         try:
-            # Flujo de Login UPN
+            # Flujo de Login BLACKBOARD
             btn_sup = page.locator("text=Supervisores")
             if btn_sup.is_visible():
                 btn_sup.click()
 
             page.wait_for_selector(BB_SELECTORS['user_input'], timeout=10000)
-            page.locator(BB_SELECTORS['user_input']).fill(UPN_MAIL)
-            page.locator(BB_SELECTORS['pass_input']).fill(UPN_PASS)
+            page.locator(BB_SELECTORS['user_input']).fill(BB_MAIL)
+            page.locator(BB_SELECTORS['pass_input']).fill(BB_PASS)
             page.locator(BB_SELECTORS['login_btn']).click()
 
             # Manejo de MFA (Z Flip6)

@@ -70,4 +70,10 @@ def procesar_datos_semana():
         "total": len(df_reporte)
     }
 
+    if 'NRC' in df_reporte.columns:
+        # Usamos una función lambda para asegurar que no haya decimales ni .0
+        df_reporte['NRC'] = df_reporte['NRC'].apply(
+            lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.','').isdigit() else "N/A"
+    )
+    
     return df_reporte, metrics

@@ -1,10 +1,10 @@
 import typer
-import os
+import time
 import pandas as pd
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.columns import Columns  # <--- Agregado para el nuevo layout
+from rich.columns import Columns
 from rich.text import Text
 from pathlib import Path
 from datetime import datetime # Para fechas automáticas
@@ -21,6 +21,8 @@ from src.reporte.repro import registrar_reprogramacion
 from src.reporte.etl_domingo import procesar_datos_semana
 from src.reporte.agente_ia import redactar_resumen_semanal
 from src.reporte.outlook import crear_borrador_outlook
+from src.bot.live import monitor  # Importamos tu nuevo módulo
+from src.bot.anuncios import survey_bot  
 from src.bot import mapa, preparador, scrapper, ui_bot
 
 
@@ -186,46 +188,37 @@ def revisar_inconsistencias():
     console.print(f"\n[dim red]* Se encontraron {len(hallazgos)} error(es) que requieren atención.[/dim red]")
 
 
-# --- COMANDO: STATUS (MONITOREO) ---
+# --- COMANDO: STATUS (MONITOREO ACTUALIZADO) ---
 @ops_app.command("status")
 def monitoreo_progreso():
-    """📈 Programas activos"""
-    # 1. Obtenemos el resumen procesado desde monitoreo.py
-    df = procesar_resumen_progreso() #
+    """📈 Programas activos y control de encuestas"""
+    # 1. Obtenemos el resumen (ahora incluye la lógica de ESTADO_ENCUESTA de monitoreo.py)
+    df = procesar_resumen_progreso() 
     
     # 2. SECCIÓN: CURSOS ACTIVOS
     df_activos = df[df['ESTADO_PROGRAMA'] == 'ACTIVO'].copy()
     
     if not df_activos.empty:
         # --- 🟢 BLOQUE DE ESTADÍSTICAS: DASHBOARD VERTICAL SENIOR ---
-        total_cursos = len(df_activos) #
-        total_programas = df_activos['PROGRAMA_NOMBRE'].nunique() #
+        total_cursos = len(df_activos)
+        total_programas = df_activos['PROGRAMA_NOMBRE'].nunique()
         
-        # 1. Agrupamos Programas por volumen de carga (Descendente)
         conteo_prog = df_activos['PROGRAMA_NOMBRE'].value_counts()
-        # 2. Agrupamos Cursos (Estilo original de la captura)
         conteo_cursos = df_activos['CURSO_NOMBRE'].value_counts()
 
-        # Usamos una tabla principal vertical para que los nombres tengan todo el ancho
         content_grid = Table.grid(expand=True)
         content_grid.add_column()
 
-        # --- SECCIÓN A: PROGRAMAS (JERARQUÍA AMARILLA) ---
         content_grid.add_row("[bold yellow]📂 [PROGRAMAS ACTUALES][/bold yellow]")
         for prog, cant in conteo_prog.items():
-            # Número en amarillo como pediste, nombre completo en blanco
             content_grid.add_row(f" [bold yellow]({cant})[/bold yellow] [white]{prog}[/white]")
         
-        # Separador estético para dividir los bloques
         content_grid.add_row("[dim white]" + "─" * 40 + "[/dim white]")
 
-        # --- SECCIÓN B: CURSOS (DETALLE CIAN) ---
         content_grid.add_row("[bold cyan]📚 [CURSOS DETALLE][/bold cyan]")
         for curso, cant in conteo_cursos.items():
-            # Recuperamos el estilo '● Cant Nombre' de tu captura favorita
             content_grid.add_row(f" [bold cyan]●[/bold cyan] [bold white]{cant}[/bold white] [white]{curso}[/white]")
 
-        # Imprimimos el Panel de Control Único
         console.print(Panel(
             content_grid,
             title=f"🚀 [bold white]SISTEMA ACTIVO: {total_cursos} CURSOS EN {total_programas} PROGRAMAS[/bold white]",
@@ -234,24 +227,20 @@ def monitoreo_progreso():
             padding=(1, 2)
         ))
 
-        # --- 📊 TABLA: DETALLE CURSOS ACTIVOS (CORREGIDA) ---
+        # --- 📊 TABLA: DETALLE DE EJECUCIÓN (CON COLUMNA ENCUESTA) ---
         table = Table(
-            title="🔍 [bold cyan]DETALLE DE EJECUCIÓN ACADÉMICA[/bold cyan]",
+            title="🔍 [bold cyan]PROGRAMAS ACTIVOS[/bold cyan]",
             title_justify="left",
             header_style="bold white on blue", 
             border_style="blue"
         ) 
 
         table.add_column("ID", style="magenta", no_wrap=True)
-        # Curso no wrap con puntos suspensivos para que no rompa la fila
-        table.add_column("Curso", style="white", width=40, no_wrap=True, overflow="ellipsis")
+        table.add_column("Curso", style="white", width=35, no_wrap=True, overflow="ellipsis")
         table.add_column("Repro", justify="center", style="bold red")
         table.add_column("Progreso", justify="center")
-        
-        # MEJORA CRÍTICA: Ancho aumentado a 18 para evitar el salto de línea
         table.add_column("Avance %", width=18, justify="center", no_wrap=True) 
-        
-        # Reordenamiento: Inicio y Fin al final
+        table.add_column("Encuesta", justify="center") # <--- NUEVA COLUMNA
         table.add_column("Inicio", justify="center", style="dim") 
         table.add_column("Fin", style="dim", justify="center")    
 
@@ -261,6 +250,15 @@ def monitoreo_progreso():
             color_bar = "red" if pct < 0.3 else "yellow" if pct < 0.7 else "green"
             barra = f"[{color_bar}]" + "●" * bloques + "[/ " + color_bar + "]" + "○" * (10 - bloques)
             
+            # --- Lógica visual de la Encuesta ---
+            st_encuesta = fila.get('ESTADO_ENCUESTA', '-')
+            if st_encuesta == "ENVIADO":
+                display_encuesta = "[green]✅ Enviado[/green]"
+            elif st_encuesta == "PENDIENTE":
+                display_encuesta = "[bold yellow]⚠️ PENDIENTE[/bold yellow]"
+            else:
+                display_encuesta = "[dim]-[/dim]"
+            
             f_inicio = fila['FECHA_INICIO'].strftime('%Y-%m-%d') if pd.notnull(fila['FECHA_INICIO']) else "N/A"
             f_fin = fila['FECHA_FIN'].strftime('%Y-%m-%d') if pd.notnull(fila['FECHA_FIN']) else "N/A"
             
@@ -269,7 +267,8 @@ def monitoreo_progreso():
                 str(fila['CURSO_NOMBRE']),
                 str(int(fila['REPROGRAMADAS'])),
                 f"{int(fila['DICTADAS'])}/{int(fila['TOTAL_SESIONES'])}",
-                f"{barra} [bold]{pct:.0%}[/bold]", # Todo en una línea ahora
+                f"{barra} [bold]{pct:.0%}[/bold]",
+                display_encuesta, # <--- SE AGREGA A LA FILA
                 f_inicio,
                 f_fin
             ) 
@@ -278,7 +277,7 @@ def monitoreo_progreso():
     else:
         console.print(Panel.fit("[yellow]No hay cursos actualmente en estado ACTIVO.[/yellow]", border_style="yellow"))
 
-    # 3. SECCIÓN: PRÓXIMOS INICIOS (MANTIENE EXCELENCIA)
+    # 3. SECCIÓN: PRÓXIMOS INICIOS
     df_proximos = df[df['ESTADO_PROGRAMA'] == 'POR INICIAR'].copy()
     
     if not df_proximos.empty:
@@ -404,20 +403,28 @@ def bot_actualizar_mapa():
 
 @bot_app.command("sync")
 def bot_flujo_completo():
-    """🚀 RECOLECCIÓN INTEGRAL: Preparar -> Scrapear -> Generar Excel"""
+    """🚀 Recolección de links de grabaciones"""
+    # 1. Preparación de datos (Antes del cronómetro principal)
     ui_bot.console.print(Panel("[bold cyan]🔥 INICIANDO RECOLECCIÓN DE GRABACIONES[/bold cyan]", border_style="cyan"))
     
-    # 1. Preparación de datos
     with ui_bot.console.status("[bold yellow]Filtrando tus cursos del Panel V7...[/bold yellow]"):
         preparador.run()
     
-    # 2. Ejecución del Scrapper
-    scrapper.run()
+    # 2. Ejecución del Scrapper con Cronómetro Centralizado
+    start_time = time.time() # INICIO
+    cantidad_nuevos = scrapper.run() 
+    end_time = time.time() # FIN
     
-    # 3. Dashboard Final (Toque Wao)
+    # Cálculo de tiempo
+    duracion_segundos = end_time - start_time
+    duracion_fmt = time.strftime("%M min %S seg", time.gmtime(duracion_segundos))
+
+    # 3. Dashboard Final (Ahora con Datos Reales de Tiempo y Cantidad)
     resumen = Text.assemble(
         ("\n📊 OPERACIÓN COMPLETADA EXITOSAMENTE\n", "bold green"),
-        ("Tus links han sido recolectados y ordenados por NRC.\n", "white"),
+        (f"⏱️  Tiempo Ejecución: {duracion_fmt}\n", "bold yellow"),
+        (f"📹 Grabaciones Nuevas: {cantidad_nuevos}\n", "bold white"),
+        ("─" * 40 + "\n", "dim"),
         ("\nArchivo de pegado: ", "dim"), (f"00_data/{config['bot_files']['grabaciones_log']}", "bold magenta"),
         ("\n\n[💡] Sugerencia: Filtra por NRC en el Excel para copiar bloques enteros.", "italic cyan")
     )
@@ -425,6 +432,23 @@ def bot_flujo_completo():
     ui_bot.console.print(Panel(resumen, title="[✨ DASHBOARD FINAL]", border_style="green", expand=True))
     ui_bot.console.print("\n[bold white on green] ✨ ¡CICLO EDU-SUITE FINALIZADO! [/bold white on green]\n")
 
+
+@bot_app.command("survey")
+def bot_enviar_encuestas(
+    preview: bool = typer.Option(True, help="Si es True, no publica, solo muestra cómo queda.")
+):
+    """📢 Envío de encuestas de satisfacción (Por defecto en modo PREVIEW)"""
+    console.print(Panel.fit(f"🚀 BOT ENCUESTAS - MODO {'PREVIEW' if preview else 'REAL'}", border_style="yellow"))
+    survey_bot.run(preview=preview) # Pasamos el parámetro al bot
+
+
+@bot_app.command("live")
+def bot_supervision_live():
+    """👁️ Verifica grabaciones ahora"""
+    console.print(Panel.fit("🕵️ [bold yellow]INICIANDO MONITOR DE ASISTENCIA LIVE[/bold yellow]", border_style="yellow"))
+    monitor.run()
+
+    
 
 if __name__ == "__main__":
     app()

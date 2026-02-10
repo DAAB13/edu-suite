@@ -20,7 +20,7 @@ def corregir_dni(serie_dni):
     """
     🆔 FORMATEADOR DE DNI
     --------------------
-    Especial para los reportes de UPN donde el DNI a veces viene con decimales (.0).
+    Especial para los reportes donde el DNI a veces viene con decimales (.0).
     - Elimina el '.0' si existe.
     - Asegura que siempre tenga 8 dígitos (rellena con ceros a la izquierda).
     """
