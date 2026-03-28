@@ -92,6 +92,30 @@ def generar_tabla_html(df):
     return estilos + html_tabla
 
 
+
+def enviar_correo_base(to, subject, body_html, attachments=None, preview=True):
+    try:
+        outlook = win32.Dispatch('outlook.application')
+        mail = outlook.CreateItem(0)
+        mail.To = to
+        mail.Subject = subject
+        mail.HTMLBody = body_html 
+
+        if attachments:
+            for ruta in attachments:
+                mail.Attachments.Add(str(ruta))
+
+        if preview:
+            mail.Save() # Guarda en Borradores sin abrir ventana
+        else:
+            mail.Send()
+        return True
+    except Exception as e:
+        console.print(f"[bold red]❌ Error en Outlook: {e}[/bold red]")
+        return False
+
+
+
 def crear_borrador_outlook(texto_ia, df_semana, metrics):
     """
     📧 Ensambla el correo con un contenedor expandido para evitar compresión.

@@ -6,9 +6,9 @@ from rich.columns import Columns
 from datetime import datetime
 
 # Importaciones de tu orquestador
-from src.ops.monitoreo import procesar_resumen_progreso
-from src.ops.auditoria import realizar_auditoria_curso
-from src.ops.supervision import query_agenda_supervision
+from src.core.monitoreo import procesar_resumen_progreso
+from src.core.auditoria import realizar_auditoria_curso
+from src.core.supervision import query_agenda_supervision
 
 console = Console()
 

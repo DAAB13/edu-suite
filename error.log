@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "C:\Users\Diego AB\Develop\edu-suite\edu.py", line 24, in <module>
+    from src.bot.live import monitor
+  File "C:\Users\Diego AB\Develop\edu-suite\src\bot\live\monitor.py", line 9, in <module>
+    from src.ops.supervision import query_agenda_supervision
+ModuleNotFoundError: No module named 'src.ops'

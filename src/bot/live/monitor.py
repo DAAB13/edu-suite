@@ -6,7 +6,7 @@ from rich.live import Live
 from rich.table import Table
 from dotenv import load_dotenv
 from src.core.config_loader import config, BASE_DIR
-from src.ops.supervision import query_agenda_supervision 
+from src.core.supervision import query_agenda_supervision 
 from src.bot.scrapper import gestionar_login_bb 
 from src.bot.ui_bot import console, log_error
 
@@ -23,7 +23,7 @@ def generar_tabla_war_room(progreso):
         st = info['estado']
         # Colores dinámicos según el hallazgo del sensor
         color = "green" if "🟢" in st else "bold red" if "🔴" in st else "yellow" if "🔍" in st else "white"
-        table.add_row(info['hora'], id_nrc, info['curso'][:40], info['docente'][:30], f"[{color}]{st}[/{color}]")
+        table.add_row(str(info['hora']), str(id_nrc), str(info['curso'])[:40], str(info['docente'])[:30], f"[{color}]{st}[/{color}]")
     return table
 
 def verificar_grabacion_en_vivo(page):
