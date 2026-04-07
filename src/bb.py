@@ -13,7 +13,7 @@ console = Console()
 # Ajuste de BASE_DIR: Ahora estamos en src/ (un nivel arriba respecto a src/bot/)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-def log_error(mensaje):
+def log_error(mensaje): #
     console.print(f"   [bold magenta]│[/bold magenta] [bold magenta]❌ {mensaje}[/bold magenta]")
 
 def log_alerta(mensaje):
